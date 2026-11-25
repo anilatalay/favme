@@ -11,11 +11,11 @@ const MIN_SPAN = 2;
 const DEFAULT_SPAN = 4;
 const SPAN_PRESETS = [2, 3, 4, 6, 8, 12];
 
-const DEFAULT_DATA = {
+const defaultData = () => ({
   groups: [
     {
       id: uid(),
-      name: 'Favoriler',
+      name: t('defaultGroupName'),
       span: DEFAULT_SPAN,
       collapsed: false,
       sites: [
@@ -25,9 +25,10 @@ const DEFAULT_DATA = {
       ],
     },
   ],
-};
+});
 
 let state = { groups: [] };
+let loaded = false;
 
 // ---------- Yardımcılar ----------
 
@@ -100,7 +101,8 @@ function findSite(siteId) {
 
 async function load() {
   const stored = await chrome.storage.local.get(STORAGE_KEY);
-  state = stored[STORAGE_KEY] ?? structuredClone(DEFAULT_DATA);
+  state = stored[STORAGE_KEY] ?? defaultData();
+  loaded = true;
   if (!stored[STORAGE_KEY]) await save();
 }
 
@@ -128,14 +130,16 @@ const groupsEl = $('#groups');
 const searchEl = $('#search');
 
 function render() {
-  const query = searchEl.value.trim().toLocaleLowerCase('tr');
+  if (!loaded) return;
+  const locale = currentLocale();
+  const query = searchEl.value.trim().toLocaleLowerCase(locale);
   groupsEl.replaceChildren();
 
   for (const group of state.groups) {
     const sites = query
       ? group.sites.filter(
           (s) =>
-            s.title.toLocaleLowerCase('tr').includes(query) ||
+            s.title.toLocaleLowerCase(locale).includes(query) ||
             s.url.toLowerCase().includes(query)
         )
       : group.sites;
@@ -147,6 +151,11 @@ function render() {
   $('#empty').hidden = state.groups.length > 0;
 }
 
+function renderEmptyText() {
+  const [before, after = ''] = t('empty').split('{button}');
+  $('#empty').replaceChildren(before, el('strong', {}, t('newGroup')), after);
+}
+
 function renderGroup(group, sites, searching) {
   const collapsed = group.collapsed && !searching;
 
@@ -155,21 +164,21 @@ function renderGroup(group, sites, searching) {
     { class: 'group-header' },
     el(
       'h2',
-      { class: 'group-name', title: 'Daralt / genişlet', dataset: { action: 'toggle-group' } },
+      { class: 'group-name', title: t('toggleGroup'), dataset: { action: 'toggle-group' } },
       group.name,
       el('span', { class: 'group-count' }, String(group.sites.length))
     ),
     group.locked
-      ? el('button', { class: 'icon-btn lock-btn', title: 'Kilitli — açmak için tıklayın', dataset: { action: 'toggle-lock' } }, '🔒')
-      : el('button', { class: 'icon-btn', title: 'Site ekle', dataset: { action: 'add-site' } }, '+'),
-    el('button', { class: 'icon-btn', title: 'Grup seçenekleri', dataset: { action: 'group-menu' } }, '⋯')
+      ? el('button', { class: 'icon-btn lock-btn', title: t('lockedClickToUnlock'), dataset: { action: 'toggle-lock' } }, '🔒')
+      : el('button', { class: 'icon-btn', title: t('addSite'), dataset: { action: 'add-site' } }, '+'),
+    el('button', { class: 'icon-btn', title: t('groupOptions'), dataset: { action: 'group-menu' } }, '⋯')
   );
 
   const list = el('div', { class: 'sites' });
   if (sites.length === 0) {
     list.append(
       el('div', { class: 'sites-empty' },
-        group.locked ? 'Bu kart kilitli' : 'Site eklemek için + tuşuna basın veya buraya sürükleyin')
+        group.locked ? t('lockedEmpty') : t('groupEmpty'))
     );
   }
   for (const site of sites) list.append(renderSite(site, group.locked));
@@ -180,7 +189,7 @@ function renderGroup(group, sites, searching) {
     { class: 'group' + (collapsed ? ' collapsed' : '') + (group.locked ? ' locked' : ''), dataset: { groupId: group.id } },
     header,
     list,
-    el('div', { class: 'resize-handle', title: `Genişlik: ${span}/${COLUMNS} — sürükleyerek değiştirin` })
+    el('div', { class: 'resize-handle', title: t('resizeTitle', { span, cols: COLUMNS }) })
   );
   section.style.setProperty('--span', span);
   return section;
@@ -198,8 +207,8 @@ function renderSite(site, locked) {
       : el(
           'div',
           { class: 'site-tools' },
-          el('button', { title: 'Düzenle', dataset: { action: 'edit-site' } }, '✎'),
-          el('button', { title: 'Sil', dataset: { action: 'delete-site' } }, '✕')
+          el('button', { title: t('edit'), dataset: { action: 'edit-site' } }, '✎'),
+          el('button', { title: t('delete'), dataset: { action: 'delete-site' } }, '✕')
         )
   );
   link.draggable = !locked;
@@ -208,7 +217,7 @@ function renderSite(site, locked) {
 
 // ---------- Diyaloglar ----------
 
-// "Vazgeç" butonu gönder butonu değil; böylece Enter her zaman "Kaydet"e basar
+// "Vazgeç" (Cancel) butonu gönder butonu değil; böylece Enter her zaman "Kaydet"e basar
 document.querySelectorAll('dialog [data-close]').forEach((btn) =>
   btn.addEventListener('click', () => btn.closest('dialog').close('cancel'))
 );
@@ -227,7 +236,7 @@ function openDialog(dialog, onSubmit) {
 
 function groupDialog(group) {
   const dialog = $('#dlg-group');
-  $('#dlg-group-title').textContent = group ? 'Grubu Yeniden Adlandır' : 'Yeni Grup';
+  $('#dlg-group-title').textContent = group ? t('groupDialogRename') : t('groupDialogNew');
   dialog.querySelector('[name=name]').value = group?.name ?? '';
 
   openDialog(dialog, (data) => {
@@ -247,11 +256,11 @@ function siteDialog({ groupId, siteId } = {}) {
 
   const editable = state.groups.filter((g) => !g.locked);
   if (editable.length === 0) {
-    alert('Tüm kartlar kilitli. Site eklemek için önce bir kartın kilidini açın.');
+    alert(t('allLocked'));
     return;
   }
 
-  $('#dlg-site-title').textContent = found ? 'Siteyi Düzenle' : 'Site Ekle';
+  $('#dlg-site-title').textContent = found ? t('siteDialogEdit') : t('siteDialogAdd');
   form.url.value = found?.site.url ?? '';
   form.title.value = found?.site.title ?? '';
   form.group.replaceChildren(
@@ -262,7 +271,7 @@ function siteDialog({ groupId, siteId } = {}) {
   openDialog(dialog, (data) => {
     const url = normalizeUrl(data.get('url'));
     if (!url) {
-      alert('Geçersiz adres.');
+      alert(t('invalidUrl'));
       return;
     }
     const title = data.get('title').trim() || hostOf(url);
@@ -302,7 +311,7 @@ function showGroupMenu(button, group) {
   const widths = el(
     'div',
     { class: 'menu-widths' },
-    el('span', { class: 'menu-label' }, `Genişlik (${COLUMNS} pay)`),
+    el('span', { class: 'menu-label' }, t('widthLabel', { cols: COLUMNS })),
     el(
       'div',
       { class: 'width-options' },
@@ -316,11 +325,11 @@ function showGroupMenu(button, group) {
     'div',
     { class: 'menu' },
     widths,
-    item(group.locked ? '🔓 Kilidi aç' : '🔒 Kartı kilitle', 'toggle-lock'),
-    group.locked ? null : item('Yeniden adlandır', 'rename'),
-    index > 0 ? item('← Öne taşı', 'left') : null,
-    index < state.groups.length - 1 ? item('Sona taşı →', 'right') : null,
-    group.locked ? null : item('Grubu sil', 'delete', 'danger')
+    item(group.locked ? t('unlock') : t('lock'), 'toggle-lock'),
+    group.locked ? null : item(t('rename'), 'rename'),
+    index > 0 ? item(t('moveLeft'), 'left') : null,
+    index < state.groups.length - 1 ? item(t('moveRight'), 'right') : null,
+    group.locked ? null : item(t('deleteGroup'), 'delete', 'danger')
   );
 
   menu.addEventListener('click', (e) => {
@@ -343,8 +352,8 @@ function showGroupMenu(button, group) {
       commit();
     } else if (action === 'delete') {
       const msg = group.sites.length
-        ? `"${group.name}" grubu ve içindeki ${group.sites.length} site silinsin mi?`
-        : `"${group.name}" grubu silinsin mi?`;
+        ? t('confirmDeleteGroupWithSites', { name: group.name, count: group.sites.length })
+        : t('confirmDeleteGroup', { name: group.name });
       if (confirm(msg)) {
         state.groups.splice(index, 1);
         commit();
@@ -392,7 +401,7 @@ groupsEl.addEventListener('click', (e) => {
       break;
     case 'delete-site': {
       const found = findSite(siteEl.dataset.siteId);
-      if (found && !found.group.locked && confirm(`"${found.site.title}" silinsin mi?`)) {
+      if (found && !found.group.locked && confirm(t('confirmDeleteSite', { title: found.site.title }))) {
         found.group.sites.splice(found.index, 1);
         commit();
       }
@@ -519,7 +528,7 @@ groupsEl.addEventListener('pointerdown', (e) => {
     if (next !== span) {
       span = next;
       groupEl.style.setProperty('--span', span);
-      handle.title = `Genişlik: ${span}/${COLUMNS}`;
+      handle.title = t('resizeTitleShort', { span, cols: COLUMNS });
     }
   };
   const onUp = () => {
@@ -571,10 +580,10 @@ $('#import-file').addEventListener('change', async (e) => {
   if (!file) return;
   try {
     const data = JSON.parse(await file.text());
-    if (!Array.isArray(data?.groups)) throw new Error('groups alanı yok');
+    if (!Array.isArray(data?.groups)) throw new Error(t('importMissingGroups'));
     const groups = data.groups.map((g) => ({
       id: uid(),
-      name: String(g.name ?? 'Grup'),
+      name: String(g.name ?? t('importedGroupName')),
       span: clampSpan(g.span ?? DEFAULT_SPAN),
       collapsed: Boolean(g.collapsed),
       locked: Boolean(g.locked),
@@ -583,12 +592,12 @@ $('#import-file').addEventListener('change', async (e) => {
         .filter((s) => s.url)
         .map((s) => ({ ...s, title: s.title || hostOf(s.url) })),
     }));
-    if (confirm(`${groups.length} grup içe aktarılacak ve mevcut veriler değiştirilecek. Devam edilsin mi?`)) {
+    if (confirm(t('confirmImport', { count: groups.length }))) {
       state = { groups };
       commit();
     }
   } catch (err) {
-    alert('Dosya okunamadı: ' + err.message);
+    alert(t('importError', { error: err.message }));
   }
 });
 
@@ -596,15 +605,17 @@ $('#import-file').addEventListener('change', async (e) => {
 
 function tick() {
   const now = new Date();
-  $('#time').textContent = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-  $('#date').textContent = now.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const locale = currentLocale();
+  $('#time').textContent = now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  $('#date').textContent = now.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
 }
 tick();
 setInterval(tick, 10_000);
 
 // ---------- Ayarlar ----------
 
-let settings = { bg: null };
+// lang: null = tarayıcı dili, 'tr' veya 'en'
+let settings = { bg: null, lang: null };
 
 function luminance(hex) {
   const [r, g, b] = [1, 3, 5].map((i) => {
@@ -614,7 +625,21 @@ function luminance(hex) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+function applyLanguage() {
+  setLanguage(settings.lang);
+  applyI18n();
+  renderEmptyText();
+  tick();
+  render();
+}
+
+let appliedLang; // henüz uygulanmadı
+
 function applySettings() {
+  if (settings.lang !== appliedLang) {
+    appliedLang = settings.lang;
+    applyLanguage();
+  }
   const body = document.body;
   const bg = /^#[0-9a-f]{6}$/i.test(settings.bg ?? '') ? settings.bg : null;
   body.classList.toggle('custom-bg', Boolean(bg));
@@ -638,6 +663,12 @@ async function saveSettings() {
 }
 
 function renderSettings() {
+  $('#lang-select').replaceChildren(
+    el('option', { value: '' }, t('languageAuto')),
+    ...LANGUAGES.map((l) => el('option', { value: l.code }, l.name))
+  );
+  $('#lang-select').value = settings.lang ?? '';
+
   const current = settings.bg?.toLowerCase();
   $('#bg-swatches').replaceChildren(
     ...BG_PRESETS.map((color) => {
@@ -653,6 +684,11 @@ function renderSettings() {
   );
   $('#bg-custom').value = settings.bg ?? getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
 }
+
+$('#lang-select').addEventListener('change', (e) => {
+  settings.lang = e.target.value || null;
+  saveSettings();
+});
 
 $('#bg-swatches').addEventListener('click', (e) => {
   const color = e.target.dataset.color;

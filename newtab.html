@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Yeni Sekme</title>
+  <title>New Tab</title>
   <link rel="stylesheet" href="newtab.css">
 </head>
 <body>
@@ -11,14 +11,14 @@
       <div id="time" class="time"></div>
       <div id="date" class="date"></div>
     </div>
-    <input id="search" class="search" type="search" placeholder="Sitelerde ara…" autocomplete="off">
+    <input id="search" class="search" type="search" data-i18n-placeholder="searchPlaceholder" autocomplete="off">
     <div class="actions">
-      <button id="btn-new-group" class="btn primary">+ Yeni Grup</button>
-      <button id="btn-menu" class="btn icon" title="Diğer">⋯</button>
+      <button id="btn-new-group" class="btn primary" data-i18n="newGroup"></button>
+      <button id="btn-menu" class="btn icon" data-i18n-title="more">⋯</button>
       <div id="menu" class="menu" hidden>
-        <button data-action="settings">⚙ Ayarlar</button>
-        <button data-action="export">Dışa aktar (JSON)</button>
-        <button data-action="import">İçe aktar (JSON)</button>
+        <button data-action="settings" data-i18n="settings"></button>
+        <button data-action="export" data-i18n="exportJson"></button>
+        <button data-action="import" data-i18n="importJson"></button>
       </div>
       <input id="import-file" type="file" accept="application/json" hidden>
     </div>
@@ -26,20 +26,19 @@
 
   <main id="groups" class="groups"></main>
 
-  <p id="empty" class="empty" hidden>
-    Henüz grup yok. <strong>+ Yeni Grup</strong> ile başlayın.
-  </p>
+  <!-- Metni newtab.js doldurur ("+ Yeni Grup" kalın gösterilir) -->
+  <p id="empty" class="empty" hidden></p>
 
   <!-- Grup ekle / yeniden adlandır -->
   <dialog id="dlg-group" class="dialog">
     <form method="dialog">
-      <h2 id="dlg-group-title">Yeni Grup</h2>
-      <label>Grup adı
+      <h2 id="dlg-group-title"></h2>
+      <label><span data-i18n="groupName"></span>
         <input name="name" required maxlength="40" autocomplete="off">
       </label>
       <div class="dialog-actions">
-        <button type="button" class="btn" data-close>Vazgeç</button>
-        <button value="ok" class="btn primary">Kaydet</button>
+        <button type="button" class="btn" data-close data-i18n="cancel"></button>
+        <button value="ok" class="btn primary" data-i18n="save"></button>
       </div>
     </form>
   </dialog>
@@ -47,19 +46,19 @@
   <!-- Site ekle / düzenle -->
   <dialog id="dlg-site" class="dialog">
     <form method="dialog">
-      <h2 id="dlg-site-title">Site Ekle</h2>
-      <label>Adres (URL)
-        <input name="url" required placeholder="https://ornek.com" autocomplete="off">
+      <h2 id="dlg-site-title"></h2>
+      <label><span data-i18n="siteUrl"></span>
+        <input name="url" required data-i18n-placeholder="siteUrlPlaceholder" autocomplete="off">
       </label>
-      <label>Başlık
-        <input name="title" maxlength="60" placeholder="Boş bırakılırsa alan adı kullanılır" autocomplete="off">
+      <label><span data-i18n="siteTitle"></span>
+        <input name="title" maxlength="60" data-i18n-placeholder="siteTitlePlaceholder" autocomplete="off">
       </label>
-      <label>Grup
+      <label><span data-i18n="siteGroup"></span>
         <select name="group"></select>
       </label>
       <div class="dialog-actions">
-        <button type="button" class="btn" data-close>Vazgeç</button>
-        <button value="ok" class="btn primary">Kaydet</button>
+        <button type="button" class="btn" data-close data-i18n="cancel"></button>
+        <button value="ok" class="btn primary" data-i18n="save"></button>
       </div>
     </form>
   </dialog>
@@ -67,24 +66,29 @@
   <!-- Ayarlar -->
   <dialog id="dlg-settings" class="dialog">
     <form method="dialog">
-      <h2>Ayarlar</h2>
+      <h2 data-i18n="settingsTitle"></h2>
       <div class="setting">
-        <span class="setting-label">Arka plan rengi</span>
+        <label class="setting-label" for="lang-select" data-i18n="language"></label>
+        <select id="lang-select" class="setting-select"></select>
+      </div>
+      <div class="setting">
+        <span class="setting-label" data-i18n="bgColor"></span>
         <div id="bg-swatches" class="swatches"></div>
         <div class="setting-row">
-          <label class="color-picker" title="Özel renk seç">
+          <label class="color-picker" data-i18n-title="customColorTitle">
             <input id="bg-custom" type="color">
-            <span>Özel renk…</span>
+            <span data-i18n="customColor"></span>
           </label>
-          <button type="button" id="bg-reset" class="btn">Varsayılan</button>
+          <button type="button" id="bg-reset" class="btn" data-i18n="resetDefault"></button>
         </div>
       </div>
       <div class="dialog-actions">
-        <button value="ok" class="btn primary">Kapat</button>
+        <button value="ok" class="btn primary" data-i18n="close"></button>
       </div>
     </form>
   </dialog>
 
+  <script src="i18n.js"></script>
   <script src="newtab.js"></script>
 </body>
 </html>
