@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <title>Yeni Sekme</title>
+  <link rel="stylesheet" href="newtab.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="clock">
+      <div id="time" class="time"></div>
+      <div id="date" class="date"></div>
+    </div>
+    <input id="search" class="search" type="search" placeholder="Sitelerde ara…" autocomplete="off">
+    <div class="actions">
+      <button id="btn-new-group" class="btn primary">+ Yeni Grup</button>
+      <button id="btn-menu" class="btn icon" title="Diğer">⋯</button>
+      <div id="menu" class="menu" hidden>
+        <button data-action="settings">⚙ Ayarlar</button>
+        <button data-action="export">Dışa aktar (JSON)</button>
+        <button data-action="import">İçe aktar (JSON)</button>
+      </div>
+      <input id="import-file" type="file" accept="application/json" hidden>
+    </div>
+  </header>
+
+  <main id="groups" class="groups"></main>
+
+  <p id="empty" class="empty" hidden>
+    Henüz grup yok. <strong>+ Yeni Grup</strong> ile başlayın.
+  </p>
+
+  <!-- Grup ekle / yeniden adlandır -->
+  <dialog id="dlg-group" class="dialog">
+    <form method="dialog">
+      <h2 id="dlg-group-title">Yeni Grup</h2>
+      <label>Grup adı
+        <input name="name" required maxlength="40" autocomplete="off">
+      </label>
+      <div class="dialog-actions">
+        <button type="button" class="btn" data-close>Vazgeç</button>
+        <button value="ok" class="btn primary">Kaydet</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Site ekle / düzenle -->
+  <dialog id="dlg-site" class="dialog">
+    <form method="dialog">
+      <h2 id="dlg-site-title">Site Ekle</h2>
+      <label>Adres (URL)
+        <input name="url" required placeholder="https://ornek.com" autocomplete="off">
+      </label>
+      <label>Başlık
+        <input name="title" maxlength="60" placeholder="Boş bırakılırsa alan adı kullanılır" autocomplete="off">
+      </label>
+      <label>Grup
+        <select name="group"></select>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" class="btn" data-close>Vazgeç</button>
+        <button value="ok" class="btn primary">Kaydet</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Ayarlar -->
+  <dialog id="dlg-settings" class="dialog">
+    <form method="dialog">
+      <h2>Ayarlar</h2>
+      <div class="setting">
+        <span class="setting-label">Arka plan rengi</span>
+        <div id="bg-swatches" class="swatches"></div>
+        <div class="setting-row">
+          <label class="color-picker" title="Özel renk seç">
+            <input id="bg-custom" type="color">
+            <span>Özel renk…</span>
+          </label>
+          <button type="button" id="bg-reset" class="btn">Varsayılan</button>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button value="ok" class="btn primary">Kapat</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="newtab.js"></script>
+</body>
+</html>
