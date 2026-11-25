@@ -26,7 +26,7 @@ A small Chrome extension that replaces the new tab page with your favorite sites
 
 The interface follows your browser language by default (Turkish or English, otherwise English). You can change it under **⋯ → Settings → Language**.
 
-Interface strings live in `i18n.js`. To add a language, add a block with the same keys to `MESSAGES` and an entry to `LANGUAGES`. The extension name and description shown on `chrome://extensions` come from `_locales/`.
+Interface strings live in `i18n.js`. To add a language, add a block with the same keys to `MESSAGES` and an entry to `LANGUAGES`. The extension name and description in `manifest.json` are in English.
 
 ## Notes
 

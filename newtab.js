@@ -30,7 +30,7 @@ const defaultData = () => ({
 let state = { groups: [] };
 let loaded = false;
 
-// ---------- Yardımcılar ----------
+// ---------- Helpers ----------
 
 function uid() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -97,7 +97,7 @@ function findSite(siteId) {
   return null;
 }
 
-// ---------- Depolama ----------
+// ---------- Storage ----------
 
 async function load() {
   const stored = await chrome.storage.local.get(STORAGE_KEY);
@@ -115,7 +115,7 @@ async function commit() {
   await save();
 }
 
-// Başka bir açık sekmede yapılan değişiklikleri yansıt
+// Reflect changes made in other open tabs
 chrome.storage.onChanged.addListener((changes, area) => {
   const next = changes[STORAGE_KEY]?.newValue;
   if (area === 'local' && next && JSON.stringify(next) !== JSON.stringify(state)) {
@@ -215,9 +215,9 @@ function renderSite(site, locked) {
   return link;
 }
 
-// ---------- Diyaloglar ----------
+// ---------- Dialogs ----------
 
-// "Vazgeç" (Cancel) butonu gönder butonu değil; böylece Enter her zaman "Kaydet"e basar
+// Cancel is not a submit button, so Enter always triggers Save
 document.querySelectorAll('dialog [data-close]').forEach((btn) =>
   btn.addEventListener('click', () => btn.closest('dialog').close('cancel'))
 );
@@ -291,7 +291,7 @@ function siteDialog({ groupId, siteId } = {}) {
   });
 }
 
-// ---------- Grup menüsü ----------
+// ---------- Group menu ----------
 
 let openMenu = null;
 
@@ -343,7 +343,7 @@ function showGroupMenu(button, group) {
       group.locked = !group.locked;
       commit();
     } else if (group.locked) {
-      return; // kilitli kartta düzenleme yok
+      return; // no editing on a locked card
     } else if (action === 'rename') groupDialog(group);
     else if (action === 'left' || action === 'right') {
       const to = index + (action === 'left' ? -1 : 1);
@@ -365,7 +365,7 @@ function showGroupMenu(button, group) {
   openMenu = menu;
 }
 
-// ---------- Olaylar ----------
+// ---------- Events ----------
 
 groupsEl.addEventListener('click', (e) => {
   const target = e.target.closest('[data-action]');
@@ -376,7 +376,7 @@ groupsEl.addEventListener('click', (e) => {
   const siteEl = target.closest('.site');
   const action = target.dataset.action;
 
-  if (siteEl) e.preventDefault(); // sitenin içindeki butonlar linki açmasın
+  if (siteEl) e.preventDefault(); // buttons inside a site tile shouldn't open the link
   e.stopPropagation();
 
   switch (action) {
@@ -419,7 +419,7 @@ document.addEventListener('keydown', (e) => {
 
 $('#btn-new-group').addEventListener('click', () => groupDialog());
 
-// ---------- Arama ----------
+// ---------- Search ----------
 
 searchEl.addEventListener('input', render);
 searchEl.addEventListener('keydown', (e) => {
@@ -434,7 +434,7 @@ searchEl.addEventListener('keydown', (e) => {
   }
 });
 
-// ---------- Sürükle & bırak ----------
+// ---------- Drag & drop ----------
 
 let dragSiteId = null;
 
@@ -461,7 +461,7 @@ groupsEl.addEventListener('dragend', () => {
 groupsEl.addEventListener('dragover', (e) => {
   const groupEl = e.target.closest('.group');
   if (!groupEl || groupEl.classList.contains('locked')) return;
-  // İç sürükleme veya dışarıdan link bırakma
+  // Internal drag, or a link dropped from outside
   if (!dragSiteId && !e.dataTransfer.types.includes('text/uri-list')) return;
   e.preventDefault();
   e.dataTransfer.dropEffect = dragSiteId ? 'move' : 'copy';
@@ -488,7 +488,7 @@ groupsEl.addEventListener('drop', (e) => {
     found.group.sites.splice(found.index, 1);
     site = found.site;
   } else {
-    // Adres çubuğundan / başka sayfadan sürüklenen link
+    // Link dragged from the address bar or another page
     const raw = e.dataTransfer.getData('text/uri-list').split('\n').find((l) => l && !l.startsWith('#'));
     const url = raw && normalizeUrl(raw);
     if (!url) return;
@@ -502,7 +502,7 @@ groupsEl.addEventListener('drop', (e) => {
   commit();
 });
 
-// ---------- Kart genişliğini sürükleyerek değiştirme ----------
+// ---------- Resize cards by dragging ----------
 
 groupsEl.addEventListener('pointerdown', (e) => {
   const handle = e.target.closest('.resize-handle');
@@ -546,7 +546,7 @@ groupsEl.addEventListener('pointerdown', (e) => {
   handle.addEventListener('pointercancel', onUp);
 });
 
-// ---------- Dışa / içe aktarma ----------
+// ---------- Export / import ----------
 
 $('#btn-menu').addEventListener('click', () => {
   const menu = $('#menu');
@@ -601,7 +601,7 @@ $('#import-file').addEventListener('change', async (e) => {
   }
 });
 
-// ---------- Saat ----------
+// ---------- Clock ----------
 
 function tick() {
   const now = new Date();
@@ -612,9 +612,9 @@ function tick() {
 tick();
 setInterval(tick, 10_000);
 
-// ---------- Ayarlar ----------
+// ---------- Settings ----------
 
-// lang: null = tarayıcı dili, 'tr' veya 'en'
+// lang: null = browser language, 'tr' or 'en'
 let settings = { bg: null, lang: null };
 
 function luminance(hex) {
@@ -633,7 +633,7 @@ function applyLanguage() {
   render();
 }
 
-let appliedLang; // henüz uygulanmadı
+let appliedLang; // not applied yet
 
 function applySettings() {
   if (settings.lang !== appliedLang) {
@@ -644,7 +644,7 @@ function applySettings() {
   const bg = /^#[0-9a-f]{6}$/i.test(settings.bg ?? '') ? settings.bg : null;
   body.classList.toggle('custom-bg', Boolean(bg));
   if (bg) {
-    // Arka plandaki yazılar (saat, tarih) her renkte okunur kalsın
+    // Keep text on the background (clock, date) readable on any color
     const dark = luminance(bg) < 0.25;
     body.style.setProperty('--page-bg', bg);
     body.style.setProperty('--page-text', dark ? '#f1f3f4' : '#1d1f23');
@@ -652,7 +652,7 @@ function applySettings() {
   } else {
     ['--page-bg', '--page-text', '--page-muted'].forEach((v) => body.style.removeProperty(v));
   }
-  // Açılışta renk "yanıp sönmesin" diye senkron bir kopya
+  // Synchronous copy so the color does not flash on load
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
@@ -699,7 +699,7 @@ $('#bg-swatches').addEventListener('click', (e) => {
 });
 $('#bg-custom').addEventListener('input', (e) => {
   settings.bg = e.target.value;
-  applySettings(); // canlı önizleme
+  applySettings(); // live preview
 });
 $('#bg-custom').addEventListener('change', saveSettings);
 $('#bg-reset').addEventListener('click', () => {
@@ -720,7 +720,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-// ---------- Başlat ----------
+// ---------- Start ----------
 
 chrome.storage.local.get(SETTINGS_KEY).then((stored) => {
   if (stored[SETTINGS_KEY]) {

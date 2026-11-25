@@ -1,7 +1,7 @@
 'use strict';
 
-// Arayüz metinleri. Yeni bir dil eklemek için bu nesneye aynı anahtarlarla bir blok ekleyin
-// ve LANGUAGES listesine adını yazın.
+// Interface strings. To add a language, add a block with the same keys to this object
+// and list it in LANGUAGES.
 const MESSAGES = {
   tr: {
     tabTitle: 'Yeni Sekme',
@@ -146,7 +146,7 @@ function detectBrowserLang() {
   return MESSAGES[browser] ? browser : 'en';
 }
 
-/** Ayardaki dili uygular. `null` veya bilinmeyen bir değer tarayıcı dilini seçer. */
+/** Applies the language setting. `null` or an unknown code falls back to the browser language. */
 function setLanguage(code) {
   currentLang = MESSAGES[code] ? code : detectBrowserLang();
 }
@@ -155,13 +155,13 @@ function currentLocale() {
   return LANGUAGES.find((l) => l.code === currentLang).locale;
 }
 
-/** Metni döndürür; `{ad}` yer tutucularını `params` ile doldurur. */
+/** Returns the string for `key`, filling `{name}` placeholders from `params`. */
 function t(key, params = {}) {
   const text = MESSAGES[currentLang][key] ?? MESSAGES.en[key] ?? key;
   return text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match));
 }
 
-/** HTML'deki data-i18n* öznitelikli öğelerin metinlerini günceller. */
+/** Updates the text of elements with data-i18n* attributes. */
 function applyI18n(root = document) {
   document.documentElement.lang = currentLang;
   document.title = t('tabTitle');

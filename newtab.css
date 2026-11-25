@@ -37,7 +37,7 @@ body {
 
 button { font: inherit; color: inherit; cursor: pointer; }
 
-/* ---------- Üst bar ---------- */
+/* ---------- Top bar ---------- */
 .topbar {
   display: flex;
   align-items: center;
@@ -102,7 +102,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .menu button:hover { background: var(--hover); }
 .menu button.danger { color: var(--danger); }
 
-/* ---------- Gruplar ---------- */
+/* ---------- Groups ---------- */
 .groups {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -125,7 +125,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .group.drop-target { border-color: var(--accent); }
 .lock-btn { font-size: 13px; }
 
-/* Dar ekranlarda kartlar alt alta */
+/* On narrow screens, stack cards vertically */
 @media (max-width: 900px) {
   .group { grid-column: 1 / -1; }
   .resize-handle { display: none; }
@@ -293,7 +293,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .empty { text-align: center; color: var(--page-muted, var(--muted)); margin-top: 60px; }
 
-/* ---------- Ayarlar ---------- */
+/* ---------- Settings ---------- */
 body.custom-bg { background: var(--page-bg); }
 
 .setting { margin-bottom: 16px; }
@@ -335,7 +335,7 @@ body.custom-bg { background: var(--page-bg); }
   cursor: pointer;
 }
 
-/* ---------- Diyaloglar ---------- */
+/* ---------- Dialogs ---------- */
 .dialog {
   width: min(420px, 92vw);
   padding: 20px;
