@@ -29,6 +29,10 @@ const defaultData = () => ({
 
 let state = { groups: [] };
 let loaded = false;
+// Card layout and settings (moving, width, lock, rename, delete) are only available in
+// edit mode (⋯ → Edit cards). Not saved, so every new tab starts with it off and cards
+// can't be changed by accident.
+let editMode = false;
 
 // ---------- Helpers ----------
 
@@ -89,10 +93,24 @@ function findGroup(groupId) {
   return state.groups.find((g) => g.id === groupId);
 }
 
+function isTodo(group) {
+  return group.type === 'todo';
+}
+
 function findSite(siteId) {
   for (const group of state.groups) {
+    if (isTodo(group)) continue;
     const index = group.sites.findIndex((s) => s.id === siteId);
     if (index !== -1) return { group, index, site: group.sites[index] };
+  }
+  return null;
+}
+
+function findItem(itemId) {
+  for (const group of state.groups) {
+    if (!isTodo(group)) continue;
+    const index = group.items.findIndex((i) => i.id === itemId);
+    if (index !== -1) return { group, index, item: group.items[index] };
   }
   return null;
 }
@@ -133,9 +151,24 @@ function render() {
   if (!loaded) return;
   const locale = currentLocale();
   const query = searchEl.value.trim().toLocaleLowerCase(locale);
+  // Keep typing in a to-do card's add field when the cards are rebuilt
+  // (after adding an item, or when another tab changes the data)
+  const active = document.activeElement;
+  const typing = active?.matches('.todo-add input')
+    ? { groupId: active.closest('.group').dataset.groupId, value: active.value }
+    : null;
   groupsEl.replaceChildren();
 
   for (const group of state.groups) {
+    if (isTodo(group)) {
+      const items = query
+        ? group.items.filter((i) => i.text.toLocaleLowerCase(locale).includes(query))
+        : group.items;
+      if (query && items.length === 0) continue;
+      groupsEl.append(renderGroup(group, items, Boolean(query)));
+      continue;
+    }
+
     const sites = query
       ? group.sites.filter(
           (s) =>
@@ -149,6 +182,14 @@ function render() {
   }
 
   $('#empty').hidden = state.groups.length > 0;
+
+  if (typing) {
+    const input = $(`.group[data-group-id="${typing.groupId}"] .todo-add input`, groupsEl);
+    if (input) {
+      input.value = typing.value;
+      input.focus();
+    }
+  }
 }
 
 function renderEmptyText() {
@@ -156,8 +197,11 @@ function renderEmptyText() {
   $('#empty').replaceChildren(before, el('strong', {}, t('newGroup')), after);
 }
 
-function renderGroup(group, sites, searching) {
+// `entries` are the sites of a site group, or the items of a to-do list
+function renderGroup(group, entries, searching) {
   const collapsed = group.collapsed && !searching;
+  const todo = isTodo(group);
+  const count = todo ? group.items.filter((i) => !i.done).length : group.sites.length;
 
   const header = el(
     'div',
@@ -166,14 +210,49 @@ function renderGroup(group, sites, searching) {
       'h2',
       { class: 'group-name', title: t('toggleGroup'), dataset: { action: 'toggle-group' } },
       group.name,
-      el('span', { class: 'group-count' }, String(group.sites.length))
+      el('span', { class: 'group-count', title: todo ? t('todoRemaining', { count }) : '' }, String(count))
     ),
     group.locked
-      ? el('button', { class: 'icon-btn lock-btn', title: t('lockedClickToUnlock'), dataset: { action: 'toggle-lock' } }, '🔒')
-      : el('button', { class: 'icon-btn', title: t('addSite'), dataset: { action: 'add-site' } }, '+'),
-    el('button', { class: 'icon-btn', title: t('groupOptions'), dataset: { action: 'group-menu' } }, '⋯')
+      ? editMode
+        ? el('button', { class: 'icon-btn lock-btn', title: t('lockedClickToUnlock'), dataset: { action: 'toggle-lock' } }, '🔒')
+        : el('span', { class: 'icon-btn lock-btn', title: t('locked') }, '🔒')
+      : todo
+        ? null
+        : el('button', { class: 'icon-btn', title: t('addSite'), dataset: { action: 'add-site' } }, '+'),
+    // Card settings live in edit mode; outside it, the menu only appears for clearing
+    // completed to-dos
+    editMode || canClearDone(group)
+      ? el('button', { class: 'icon-btn', title: t('groupOptions'), dataset: { action: 'group-menu' } }, '⋯')
+      : null
   );
 
+  // In edit mode, cards are moved by dragging their header; locked cards stay in place. Not
+  // while searching: hidden cards would make the rows on screen differ from the real ones.
+  header.draggable = editMode && !group.locked && !searching;
+
+  const list = todo ? renderTodoList(group, entries, searching) : renderSiteList(group, entries);
+
+  const span = clampSpan(group.span ?? DEFAULT_SPAN);
+  const section = el(
+    'section',
+    {
+      class:
+        'group' +
+        (todo ? ' todo-group' : '') +
+        (group.rowStart ? ' row-start' : '') +
+        (collapsed ? ' collapsed' : '') +
+        (group.locked ? ' locked' : ''),
+      dataset: { groupId: group.id },
+    },
+    header,
+    list,
+    editMode ? el('div', { class: 'resize-handle', title: t('resizeTitle', { span, cols: COLUMNS }) }) : null
+  );
+  section.style.setProperty('--span', span);
+  return section;
+}
+
+function renderSiteList(group, sites) {
   const list = el('div', { class: 'sites' });
   if (sites.length === 0) {
     list.append(
@@ -182,17 +261,64 @@ function renderGroup(group, sites, searching) {
     );
   }
   for (const site of sites) list.append(renderSite(site, group.locked));
+  return list;
+}
 
-  const span = clampSpan(group.span ?? DEFAULT_SPAN);
-  const section = el(
-    'section',
-    { class: 'group' + (collapsed ? ' collapsed' : '') + (group.locked ? ' locked' : ''), dataset: { groupId: group.id } },
-    header,
-    list,
-    el('div', { class: 'resize-handle', title: t('resizeTitle', { span, cols: COLUMNS }) })
+function renderTodoList(group, items, searching) {
+  const body = el('div', { class: 'todo' });
+  // Adding is hidden while searching, since a new item may not match the filter
+  if (!group.locked && !searching) {
+    body.append(
+      el('form', { class: 'todo-add' },
+        el('input', { name: 'text', placeholder: t('todoPlaceholder'), maxLength: 200, autocomplete: 'off' }))
+    );
+  }
+  if (items.length === 0) {
+    body.append(el('div', { class: 'sites-empty' }, group.locked ? t('lockedEmpty') : t('todoEmpty')));
+    return body;
+  }
+  body.append(el('ul', { class: 'todo-list' }, ...items.map((item) => renderTodoItem(item, group.locked))));
+  return body;
+}
+
+// When an item was added, e.g. "25 Nov 14:46"; the year only if it isn't this year
+function formatAdded(ms) {
+  const date = new Date(ms);
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleString(currentLocale(), {
+    day: 'numeric',
+    month: 'short',
+    year: sameYear ? undefined : 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function renderTodoItem(item, locked) {
+  return el(
+    'li',
+    // Clicking anywhere on the row ticks the item
+    { class: 'todo-item' + (item.done ? ' done' : ''), dataset: { itemId: item.id, action: 'toggle-todo' } },
+    el('input', { type: 'checkbox', checked: item.done, tabIndex: -1 }),
+    el(
+      'div',
+      { class: 'todo-main' },
+      el('span', { class: 'todo-text' }, item.text),
+      // Items added before dates were recorded have no createdAt
+      Number.isFinite(item.createdAt)
+        ? el('time', { class: 'todo-date', dateTime: new Date(item.createdAt).toISOString() }, formatAdded(item.createdAt))
+        : null
+    ),
+    // Deleting a to-do is always available; editing it needs edit mode
+    locked
+      ? null
+      : el(
+          'div',
+          { class: 'todo-tools' },
+          editMode ? el('button', { title: t('edit'), dataset: { action: 'edit-todo' } }, '✎') : null,
+          el('button', { class: 'danger', title: t('delete'), dataset: { action: 'delete-todo' } }, '✕')
+        )
   );
-  section.style.setProperty('--span', span);
-  return section;
 }
 
 function renderSite(site, locked) {
@@ -202,7 +328,8 @@ function renderSite(site, locked) {
     { class: 'site', href: site.url, title: site.url, dataset: { siteId: site.id } },
     el('div', { class: 'site-icon' }, img),
     el('div', { class: 'site-title' }, site.title),
-    locked
+    // Editing and deleting items needs edit mode
+    locked || !editMode
       ? null
       : el(
           'div',
@@ -238,12 +365,19 @@ function groupDialog(group) {
   const dialog = $('#dlg-group');
   $('#dlg-group-title').textContent = group ? t('groupDialogRename') : t('groupDialogNew');
   dialog.querySelector('[name=name]').value = group?.name ?? '';
+  // The type is chosen only when creating a card
+  $('#group-type-field').hidden = Boolean(group);
+  dialog.querySelector('[name=type]').value = 'sites';
 
   openDialog(dialog, (data) => {
     const name = data.get('name').trim();
     if (!name) return;
     if (group) group.name = name;
-    else state.groups.push({ id: uid(), name, span: DEFAULT_SPAN, collapsed: false, sites: [] });
+    else if (data.get('type') === 'todo') {
+      state.groups.push({ id: uid(), type: 'todo', name, span: DEFAULT_SPAN, collapsed: false, items: [] });
+    } else {
+      state.groups.push({ id: uid(), name, span: DEFAULT_SPAN, collapsed: false, sites: [] });
+    }
     commit();
   });
 }
@@ -254,7 +388,7 @@ function siteDialog({ groupId, siteId } = {}) {
   const form = $('form', dialog);
   if (found?.group.locked) return;
 
-  const editable = state.groups.filter((g) => !g.locked);
+  const editable = state.groups.filter((g) => !g.locked && !isTodo(g));
   if (editable.length === 0) {
     alert(t('allLocked'));
     return;
@@ -301,9 +435,13 @@ function closeMenus() {
   $('#menu').hidden = true;
 }
 
+function canClearDone(group) {
+  return isTodo(group) && !group.locked && group.items.some((i) => i.done);
+}
+
+// Width, lock, rename and delete are only offered in edit mode
 function showGroupMenu(button, group) {
   closeMenus();
-  const index = state.groups.indexOf(group);
   const item = (label, action, cls = '') =>
     el('button', { class: cls, dataset: { menuAction: action } }, label);
 
@@ -324,19 +462,25 @@ function showGroupMenu(button, group) {
   const menu = el(
     'div',
     { class: 'menu' },
-    widths,
-    item(group.locked ? t('unlock') : t('lock'), 'toggle-lock'),
-    group.locked ? null : item(t('rename'), 'rename'),
-    index > 0 ? item(t('moveLeft'), 'left') : null,
-    index < state.groups.length - 1 ? item(t('moveRight'), 'right') : null,
-    group.locked ? null : item(t('deleteGroup'), 'delete', 'danger')
+    editMode ? widths : null,
+    editMode ? item(group.locked ? t('unlock') : t('lock'), 'toggle-lock') : null,
+    editMode && !group.locked ? item(t('rename'), 'rename') : null,
+    canClearDone(group) ? item(t('clearDone'), 'clear-done') : null,
+    editMode && !group.locked ? item(t('deleteGroup'), 'delete', 'danger') : null
   );
 
   menu.addEventListener('click', (e) => {
     const action = e.target.dataset.menuAction;
     if (!action) return;
     closeMenus();
-    if (action === 'span') {
+    if (action === 'clear-done') {
+      if (canClearDone(group)) {
+        group.items = group.items.filter((i) => !i.done);
+        commit();
+      }
+    } else if (!editMode) {
+      return; // card settings need edit mode
+    } else if (action === 'span') {
       group.span = clampSpan(e.target.dataset.span);
       commit();
     } else if (action === 'toggle-lock') {
@@ -345,17 +489,15 @@ function showGroupMenu(button, group) {
     } else if (group.locked) {
       return; // no editing on a locked card
     } else if (action === 'rename') groupDialog(group);
-    else if (action === 'left' || action === 'right') {
-      const to = index + (action === 'left' ? -1 : 1);
-      state.groups.splice(index, 1);
-      state.groups.splice(to, 0, group);
-      commit();
-    } else if (action === 'delete') {
-      const msg = group.sites.length
-        ? t('confirmDeleteGroupWithSites', { name: group.name, count: group.sites.length })
-        : t('confirmDeleteGroup', { name: group.name });
+    else if (action === 'delete') {
+      const count = isTodo(group) ? group.items.length : group.sites.length;
+      const msg = !count
+        ? t('confirmDeleteGroup', { name: group.name })
+        : isTodo(group)
+          ? t('confirmDeleteTodoWithItems', { name: group.name, count })
+          : t('confirmDeleteGroupWithSites', { name: group.name, count });
       if (confirm(msg)) {
-        state.groups.splice(index, 1);
+        detachGroup(group);
         commit();
       }
     }
@@ -368,6 +510,7 @@ function showGroupMenu(button, group) {
 // ---------- Events ----------
 
 groupsEl.addEventListener('click', (e) => {
+  if (e.target.closest('.todo-edit')) return; // typing in the inline editor
   const target = e.target.closest('[data-action]');
   if (!target) return;
 
@@ -381,6 +524,7 @@ groupsEl.addEventListener('click', (e) => {
 
   switch (action) {
     case 'toggle-lock':
+      if (!editMode) break;
       group.locked = !group.locked;
       commit();
       break;
@@ -397,11 +541,33 @@ groupsEl.addEventListener('click', (e) => {
       else showGroupMenu(target, group);
       break;
     case 'edit-site':
+      if (!editMode) break;
       siteDialog({ siteId: siteEl.dataset.siteId });
       break;
+    case 'toggle-todo': {
+      // Ticking stays allowed on a locked card
+      const found = findItem(target.closest('.todo-item').dataset.itemId);
+      if (found) {
+        found.item.done = !found.item.done;
+        commit();
+      }
+      break;
+    }
+    case 'edit-todo':
+      if (!editMode) break;
+      editTodo(target.closest('.todo-item'));
+      break;
+    case 'delete-todo': {
+      const found = findItem(target.closest('.todo-item').dataset.itemId);
+      if (found && !found.group.locked) {
+        found.group.items.splice(found.index, 1);
+        commit();
+      }
+      break;
+    }
     case 'delete-site': {
       const found = findSite(siteEl.dataset.siteId);
-      if (found && !found.group.locked && confirm(t('confirmDeleteSite', { title: found.site.title }))) {
+      if (found && editMode && !found.group.locked && confirm(t('confirmDeleteSite', { title: found.site.title }))) {
         found.group.sites.splice(found.index, 1);
         commit();
       }
@@ -410,12 +576,73 @@ groupsEl.addEventListener('click', (e) => {
   }
 });
 
+// ---------- To-do lists ----------
+
+groupsEl.addEventListener('submit', (e) => {
+  const form = e.target.closest('.todo-add');
+  if (!form) return;
+  e.preventDefault();
+  const group = findGroup(form.closest('.group').dataset.groupId);
+  const input = form.elements.text;
+  const text = input.value.trim();
+  if (!group || group.locked || !text) return;
+  group.items.push({ id: uid(), text, done: false, createdAt: Date.now() });
+  input.value = ''; // render keeps the focus in the (now empty) field for the next item
+  commit();
+});
+
+// Edit an item's text inline
+function editTodo(itemEl) {
+  const textEl = $('.todo-text', itemEl);
+  const found = findItem(itemEl.dataset.itemId);
+  if (!textEl || !found || found.group.locked || !editMode) return;
+
+  const input = el('input', { class: 'todo-edit', value: found.item.text, maxLength: 200 });
+  let finished = false;
+  const finish = (saveIt) => {
+    if (finished) return;
+    finished = true;
+    const text = input.value.trim();
+    if (saveIt && text && text !== found.item.text) {
+      found.item.text = text;
+      commit();
+    } else {
+      render();
+    }
+  };
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') finish(true);
+    else if (ev.key === 'Escape') {
+      ev.stopPropagation();
+      finish(false);
+    }
+  });
+  input.addEventListener('blur', () => finish(true));
+  textEl.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.menu') && !e.target.closest('#btn-menu')) closeMenus();
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeMenus();
+  if (e.key !== 'Escape') return;
+  const menuOpen = openMenu || !$('#menu').hidden;
+  closeMenus();
+  // Esc leaves edit mode, unless it was closing a menu or a dialog
+  if (!menuOpen && editMode && !document.querySelector('dialog[open]')) setEditMode(false);
 });
+
+function setEditMode(on) {
+  closeMenus();
+  editMode = on;
+  document.body.classList.toggle('editing', on);
+  $('#btn-done-editing').hidden = !on;
+  render();
+}
+
+$('#btn-done-editing').addEventListener('click', () => setEditMode(false));
 
 $('#btn-new-group').addEventListener('click', () => groupDialog());
 
@@ -437,8 +664,215 @@ searchEl.addEventListener('keydown', (e) => {
 // ---------- Drag & drop ----------
 
 let dragSiteId = null;
+let dragGroupId = null;
+const GROUP_MIME = 'application/x-favme-group';
+const DROP_CLASSES = ['drop-left', 'drop-right', 'drop-top', 'drop-bottom'];
+
+// Matches the CSS breakpoint where every card takes a full row
+const stackedLayout = matchMedia('(max-width: 900px)');
+
+function spanOf(group) {
+  return clampSpan(group.span ?? DEFAULT_SPAN);
+}
+
+// Rows on a wide screen. The grid places cards in order and wraps when a card no longer
+// fits; a card with `rowStart` always begins a new row (CSS: grid-column-start 1).
+function layoutRows(groups) {
+  const rows = [];
+  let row = null;
+  let used = 0;
+  for (const g of groups) {
+    const span = spanOf(g);
+    if (!row || g.rowStart || used + span > COLUMNS) {
+      row = [];
+      rows.push(row);
+      used = 0;
+    }
+    row.push(g);
+    used += span;
+  }
+  return rows;
+}
+
+function rowOf(groups, member) {
+  return layoutRows(groups).find((row) => row.includes(member)) ?? [];
+}
+
+// Pin the rows as they are on screen, so moving one card doesn't make the cards after it
+// slide into other rows: the first card of every row becomes a row start.
+function freezeRows() {
+  for (const row of layoutRows(state.groups)) {
+    row.forEach((g, i) => {
+      if (i === 0) g.rowStart = true;
+      else delete g.rowStart;
+    });
+  }
+}
+
+// Take a card out of the list. If it started a row, the next card in that row takes over.
+function detachGroup(group) {
+  const index = state.groups.indexOf(group);
+  const next = state.groups[index + 1];
+  if (next && rowOf(state.groups, group).includes(next) && rowOf(state.groups, group)[0] === group) {
+    next.rowStart = true;
+  }
+  state.groups.splice(index, 1);
+}
+
+// Before `moving` is placed beside `target`, narrow the two so they share target's row.
+// The target gives way first but keeps at least half of the room the two share; the
+// dragged card shrinks only if it still doesn't fit. If the row can't hold both even at
+// minimum width, widths are left unchanged. Call it while `moving` is still in place.
+function fitBeside(moving, target) {
+  const others = rowOf(state.groups, target).filter((g) => g !== target && g !== moving);
+  const free = COLUMNS - others.reduce((sum, g) => sum + spanOf(g), 0);
+  const movingSpan = spanOf(moving);
+  const targetSpan = spanOf(target);
+  if (movingSpan + targetSpan <= free) return;
+
+  const targetNext = Math.max(free - movingSpan, Math.min(targetSpan, Math.floor(free / 2)));
+  const movingNext = Math.min(movingSpan, free - targetNext);
+  if (targetNext < MIN_SPAN || movingNext < MIN_SPAN) return;
+  target.span = targetNext;
+  moving.span = movingNext;
+}
+
+/**
+ * Moves a card. `side` is relative to `target`:
+ * - 'left' / 'right': beside it, in its row (narrowing cards if the row is full)
+ * - 'top' / 'bottom': on a new row of its own, just above / below target's row
+ * When every card has its own row (narrow screen), top/bottom simply mean before/after.
+ * Returns false when nothing would change.
+ */
+function placeCard(moving, target, side) {
+  if (stackedLayout.matches) side = side === 'top' || side === 'left' ? 'left' : 'right';
+  if (moving === target && (side === 'left' || side === 'right')) return false;
+
+  freezeRows();
+  const row = rowOf(state.groups, target).filter((g) => g !== moving);
+  if (row.length === 0) return false; // the card is alone in that row already
+  if ((side === 'left' || side === 'right') && !stackedLayout.matches) fitBeside(moving, target);
+  detachGroup(moving);
+
+  let at;
+  let rowStart = false;
+  if (side === 'left') {
+    at = state.groups.indexOf(target);
+    if (target.rowStart) {
+      rowStart = true;
+      delete target.rowStart;
+    }
+  } else if (side === 'right') {
+    at = state.groups.indexOf(target) + 1;
+  } else if (side === 'top') {
+    at = state.groups.indexOf(row[0]); // row[0] is a row start, so `moving` gets a row of its own
+    rowStart = true;
+  } else {
+    at = state.groups.indexOf(row[row.length - 1]) + 1; // the card after it starts the next row
+    rowStart = true;
+  }
+  if (rowStart) moving.rowStart = true;
+  else delete moving.rowStart;
+  state.groups.splice(at, 0, moving);
+  return true;
+}
+
+// Where a dragged card would land relative to the card element under the pointer. The top
+// and bottom quarter of a card mean above/below its row; the rest, beside the card.
+function cardDropSide(groupEl, e) {
+  const rect = groupEl.getBoundingClientRect();
+  const y = (e.clientY - rect.top) / rect.height;
+  if (stackedLayout.matches) return y < 0.5 ? 'top' : 'bottom';
+  if (y < 0.25) return 'top';
+  if (y > 0.75) return 'bottom';
+  return e.clientX < rect.left + rect.width / 2 ? 'left' : 'right';
+}
+
+// Resolves the drop spot for a dragged card, also over the empty space around the cards:
+// below every card → a new last row; level with a row → beside the card to the left of
+// the pointer, or below the row when the pointer is under one of its (shorter) cards.
+function cardDropAt(e) {
+  const hit = e.target.closest('.group');
+  if (hit) return { groupEl: hit, side: cardDropSide(hit, e) };
+
+  const cards = [...groupsEl.querySelectorAll('.group')].map((node) => ({ node, rect: node.getBoundingClientRect() }));
+  if (cards.length === 0) return null;
+  if (e.clientY > Math.max(...cards.map((c) => c.rect.bottom))) {
+    return { groupEl: cards[cards.length - 1].node, side: 'bottom' };
+  }
+  const tops = cards.map((c) => Math.round(c.rect.top)).filter((top) => top <= e.clientY);
+  if (tops.length === 0) return { groupEl: cards[0].node, side: 'top' };
+  const rowTop = Math.max(...tops);
+  const row = cards.filter((c) => Math.round(c.rect.top) === rowTop);
+  const under = row.find((c) => e.clientX >= c.rect.left && e.clientX <= c.rect.right);
+  if (under) return { groupEl: under.node, side: 'bottom' };
+  const leftOf = row.filter((c) => c.rect.right < e.clientX);
+  if (leftOf.length) return { groupEl: leftOf[leftOf.length - 1].node, side: 'right' };
+  return { groupEl: row[0].node, side: 'left' };
+}
+
+// Shows where the card will land. Above/below markers span the whole row.
+function showCardDropMarker(groupEl, side) {
+  clearCardDropMarkers();
+  if (groupEl.dataset.groupId === dragGroupId) {
+    // Over the dragged card itself, only "own row" moves change anything
+    const self = findGroup(dragGroupId);
+    if (stackedLayout.matches || side === 'left' || side === 'right' || rowOf(state.groups, self).length < 2) return;
+  }
+  const rect = groupEl.getBoundingClientRect();
+  const styles = getComputedStyle(groupsEl);
+  const innerLeft = groupsEl.getBoundingClientRect().left + parseFloat(styles.paddingLeft);
+  const innerWidth = groupsEl.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
+  const rowBottom = Math.max(
+    ...[...groupsEl.querySelectorAll('.group')]
+      .map((n) => n.getBoundingClientRect())
+      .filter((r) => Math.round(r.top) === Math.round(rect.top))
+      .map((r) => r.bottom)
+  );
+  groupEl.style.setProperty('--row-left', `${innerLeft - rect.left}px`);
+  groupEl.style.setProperty('--row-width', `${innerWidth}px`);
+  groupEl.style.setProperty('--row-extra', `${rowBottom - rect.bottom}px`);
+  groupEl.classList.add('drop-' + side);
+}
+
+function clearCardDropMarkers() {
+  groupsEl.querySelectorAll('.group').forEach((n) => {
+    n.classList.remove(...DROP_CLASSES);
+    ['--row-left', '--row-width', '--row-extra'].forEach((v) => n.style.removeProperty(v));
+  });
+}
+
+// The drop re-renders the cards, so `dragend` then fires on a detached node and never
+// reaches groupsEl. Drag state is therefore also reset on drop and on every new drag.
+function resetDrag() {
+  dragSiteId = null;
+  dragGroupId = null;
+  clearCardDropMarkers();
+  document.querySelectorAll('.dragging, .drop-target').forEach((n) =>
+    n.classList.remove('dragging', 'drop-target')
+  );
+}
 
 groupsEl.addEventListener('dragstart', (e) => {
+  resetDrag();
+  const header = e.target.closest?.('.group-header');
+  if (header) {
+    const groupEl = header.closest('.group');
+    if (groupEl.classList.contains('locked')) {
+      e.preventDefault();
+      return;
+    }
+    dragGroupId = groupEl.dataset.groupId;
+    closeMenus();
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData(GROUP_MIME, dragGroupId);
+    const rect = groupEl.getBoundingClientRect();
+    e.dataTransfer.setDragImage(groupEl, e.clientX - rect.left, e.clientY - rect.top);
+    // Dim after the drag image has been captured
+    requestAnimationFrame(() => groupEl.classList.add('dragging'));
+    return;
+  }
+
   const siteEl = e.target.closest('.site');
   if (!siteEl) return;
   if (siteEl.closest('.group.locked')) {
@@ -451,16 +885,20 @@ groupsEl.addEventListener('dragstart', (e) => {
   e.dataTransfer.setData('text/uri-list', siteEl.href);
 });
 
-groupsEl.addEventListener('dragend', () => {
-  dragSiteId = null;
-  document.querySelectorAll('.dragging, .drop-target').forEach((n) =>
-    n.classList.remove('dragging', 'drop-target')
-  );
-});
+groupsEl.addEventListener('dragend', resetDrag);
 
 groupsEl.addEventListener('dragover', (e) => {
+  if (dragGroupId) {
+    const spot = cardDropAt(e);
+    if (!spot) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    showCardDropMarker(spot.groupEl, spot.side);
+    return;
+  }
+
   const groupEl = e.target.closest('.group');
-  if (!groupEl || groupEl.classList.contains('locked')) return;
+  if (!groupEl || groupEl.classList.contains('locked') || groupEl.classList.contains('todo-group')) return;
   // Internal drag, or a link dropped from outside
   if (!dragSiteId && !e.dataTransfer.types.includes('text/uri-list')) return;
   e.preventDefault();
@@ -470,20 +908,32 @@ groupsEl.addEventListener('dragover', (e) => {
 });
 
 groupsEl.addEventListener('drop', (e) => {
+  if (dragGroupId) {
+    e.preventDefault();
+    const spot = cardDropAt(e);
+    const moving = findGroup(dragGroupId);
+    resetDrag();
+    const target = spot && findGroup(spot.groupEl.dataset.groupId);
+    if (moving && target && placeCard(moving, target, spot.side)) commit();
+    return;
+  }
+
   const groupEl = e.target.closest('.group');
   if (!groupEl) return;
   e.preventDefault();
-  groupEl.classList.remove('drop-target');
+
+  const draggedSiteId = dragSiteId;
+  resetDrag();
 
   const target = findGroup(groupEl.dataset.groupId);
-  if (!target || target.locked) return;
+  if (!target || target.locked || isTodo(target)) return;
   const beforeEl = e.target.closest('.site');
   const beforeId = beforeEl?.dataset.siteId;
 
   let site;
-  if (dragSiteId) {
-    if (dragSiteId === beforeId) return;
-    const found = findSite(dragSiteId);
+  if (draggedSiteId) {
+    if (draggedSiteId === beforeId) return;
+    const found = findSite(draggedSiteId);
     if (!found || found.group.locked) return;
     found.group.sites.splice(found.index, 1);
     site = found.site;
@@ -558,7 +1008,9 @@ $('#btn-menu').addEventListener('click', () => {
 $('#menu').addEventListener('click', (e) => {
   const action = e.target.dataset.action;
   closeMenus();
-  if (action === 'settings') {
+  if (action === 'edit-layout') {
+    setEditMode(!editMode);
+  } else if (action === 'settings') {
     renderSettings();
     $('#dlg-settings').showModal();
   } else if (action === 'export') {
@@ -581,17 +1033,32 @@ $('#import-file').addEventListener('change', async (e) => {
   try {
     const data = JSON.parse(await file.text());
     if (!Array.isArray(data?.groups)) throw new Error(t('importMissingGroups'));
-    const groups = data.groups.map((g) => ({
-      id: uid(),
-      name: String(g.name ?? t('importedGroupName')),
-      span: clampSpan(g.span ?? DEFAULT_SPAN),
-      collapsed: Boolean(g.collapsed),
-      locked: Boolean(g.locked),
-      sites: (g.sites ?? [])
+    const groups = data.groups.map((g) => {
+      const base = {
+        id: uid(),
+        name: String(g.name ?? t('importedGroupName')),
+        span: clampSpan(g.span ?? DEFAULT_SPAN),
+        collapsed: Boolean(g.collapsed),
+        locked: Boolean(g.locked),
+        ...(g.rowStart ? { rowStart: true } : {}),
+      };
+      if (g.type === 'todo') {
+        const items = (Array.isArray(g.items) ? g.items : [])
+          .map((i) => ({
+            id: uid(),
+            text: String(i?.text ?? '').trim(),
+            done: Boolean(i?.done),
+            ...(Number.isFinite(i?.createdAt) ? { createdAt: i.createdAt } : {}),
+          }))
+          .filter((i) => i.text);
+        return { ...base, type: 'todo', items };
+      }
+      const sites = (g.sites ?? [])
         .map((s) => ({ id: uid(), url: normalizeUrl(String(s.url ?? '')), title: String(s.title ?? '') }))
         .filter((s) => s.url)
-        .map((s) => ({ ...s, title: s.title || hostOf(s.url) })),
-    }));
+        .map((s) => ({ ...s, title: s.title || hostOf(s.url) }));
+      return { ...base, sites };
+    });
     if (confirm(t('confirmImport', { count: groups.length }))) {
       state = { groups };
       commit();

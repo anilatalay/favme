@@ -107,11 +107,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   align-items: start;
+  align-content: start;
   gap: 20px;
+  /* Reach the bottom of the window so a card can be dropped below the last row */
+  min-height: calc(100vh - 110px);
   max-width: 1400px;
   margin: 0 auto;
   padding: 8px 32px 48px;
 }
+.groups:empty { min-height: 0; }
 
 .group {
   position: relative;
@@ -122,12 +126,40 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--card);
   box-shadow: var(--shadow);
 }
+/* A row start always begins a new row */
+.group.row-start { grid-column: 1 / span var(--span, 4); }
 .group.drop-target { border-color: var(--accent); }
+.group.dragging { opacity: .4; }
+.group-header[draggable="true"] { cursor: grab; }
+/* Edit mode: cards can be moved */
+body.editing .group:not(.locked) { border-style: dashed; border-color: var(--accent); }
+
+/* Where a dragged card will land: a bar in the gap next to the target card */
+.group.drop-left::before,
+.group.drop-right::before,
+.group.drop-top::before,
+.group.drop-bottom::before {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.group.drop-left::before,
+.group.drop-right::before { top: 0; bottom: 0; width: 4px; }
+.group.drop-left::before { left: -12px; }
+.group.drop-right::before { right: -12px; }
+/* Above/below means a new row, so the marker spans the row (offsets set from JS) */
+.group.drop-top::before,
+.group.drop-bottom::before { left: var(--row-left, 0px); width: var(--row-width, 100%); height: 4px; }
+.group.drop-top::before { top: -12px; }
+.group.drop-bottom::before { bottom: calc(-12px - var(--row-extra, 0px)); }
 .lock-btn { font-size: 13px; }
 
 /* On narrow screens, stack cards vertically */
 @media (max-width: 900px) {
-  .group { grid-column: 1 / -1; }
+  .group, .group.row-start { grid-column: 1 / -1; }
   .resize-handle { display: none; }
 }
 
@@ -285,6 +317,79 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .site-tools button:hover { color: var(--text); }
 .site-tools button[data-action="delete-site"]:hover { color: var(--danger); }
 
+/* ---------- To-do lists ---------- */
+.todo { padding: 10px; }
+.group.collapsed .todo { display: none; }
+.todo .sites-empty { padding: 12px 0 4px; }
+
+.todo-add input,
+.todo-edit {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+.todo-add input:focus,
+.todo-edit:focus { border-color: var(--accent); }
+
+.todo-list { margin: 6px 0 0; padding: 0; list-style: none; }
+
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 2px 4px 2px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.todo-item:hover { background: var(--hover); }
+.todo-item input[type="checkbox"] {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  pointer-events: none; /* the row handles the click */
+}
+.todo-item .todo-edit { flex: 1; padding: 4px 8px; cursor: text; user-select: text; }
+
+.todo-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding: 3px 0;
+}
+.todo-date { color: var(--muted); font-size: 11px; }
+
+.todo-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.todo-item.done .todo-text { color: var(--muted); text-decoration: line-through; }
+
+.todo-tools { display: flex; flex: none; visibility: hidden; }
+.todo-item:hover .todo-tools { visibility: visible; }
+.todo-tools button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+.todo-tools button:hover { color: var(--text); }
+.todo-tools button.danger:hover { color: var(--danger); }
+
 .drop-marker {
   width: 3px;
   border-radius: 2px;
@@ -365,5 +470,6 @@ body.custom-bg { background: var(--page-bg); }
   font-size: 14px;
   outline: none;
 }
+.dialog label[hidden] { display: none; }
 .dialog input:focus, .dialog select:focus { border-color: var(--accent); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }

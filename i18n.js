@@ -5,9 +5,11 @@
 const MESSAGES = {
   tr: {
     tabTitle: 'Yeni Sekme',
-    searchPlaceholder: 'Sitelerde ara…',
+    searchPlaceholder: 'Site ve yapılacaklarda ara…',
     newGroup: '+ Yeni Grup',
     more: 'Diğer',
+    editLayout: '✥ Kartları düzenle',
+    doneEditing: '✓ Bitti',
     settings: '⚙ Ayarlar',
     exportJson: 'Dışa aktar (JSON)',
     importJson: 'İçe aktar (JSON)',
@@ -38,6 +40,7 @@ const MESSAGES = {
 
     toggleGroup: 'Daralt / genişlet',
     lockedClickToUnlock: 'Kilitli — açmak için tıklayın',
+    locked: 'Kilitli',
     addSite: 'Site ekle',
     groupOptions: 'Grup seçenekleri',
     lockedEmpty: 'Bu kart kilitli',
@@ -51,8 +54,6 @@ const MESSAGES = {
     lock: '🔒 Kartı kilitle',
     unlock: '🔓 Kilidi aç',
     rename: 'Yeniden adlandır',
-    moveLeft: '← Öne taşı',
-    moveRight: 'Sona taşı →',
     deleteGroup: 'Grubu sil',
 
     allLocked: 'Tüm kartlar kilitli. Site eklemek için önce bir kartın kilidini açın.',
@@ -66,13 +67,24 @@ const MESSAGES = {
 
     defaultGroupName: 'Favoriler',
     importedGroupName: 'Grup',
+
+    groupType: 'Tür',
+    groupTypeSites: 'Site grubu',
+    groupTypeTodo: 'Yapılacaklar listesi',
+    todoPlaceholder: 'Yeni madde ekle…',
+    todoEmpty: 'Henüz madde yok',
+    todoRemaining: '{count} madde kaldı',
+    clearDone: 'Tamamlananları temizle',
+    confirmDeleteTodoWithItems: '"{name}" listesi ve içindeki {count} madde silinsin mi?',
   },
 
   en: {
     tabTitle: 'New Tab',
-    searchPlaceholder: 'Search sites…',
+    searchPlaceholder: 'Search sites and to-dos…',
     newGroup: '+ New Group',
     more: 'More',
+    editLayout: '✥ Edit cards',
+    doneEditing: '✓ Done',
     settings: '⚙ Settings',
     exportJson: 'Export (JSON)',
     importJson: 'Import (JSON)',
@@ -103,6 +115,7 @@ const MESSAGES = {
 
     toggleGroup: 'Collapse / expand',
     lockedClickToUnlock: 'Locked — click to unlock',
+    locked: 'Locked',
     addSite: 'Add site',
     groupOptions: 'Group options',
     lockedEmpty: 'This card is locked',
@@ -116,8 +129,6 @@ const MESSAGES = {
     lock: '🔒 Lock card',
     unlock: '🔓 Unlock',
     rename: 'Rename',
-    moveLeft: '← Move left',
-    moveRight: 'Move right →',
     deleteGroup: 'Delete group',
 
     allLocked: 'All cards are locked. Unlock a card first to add a site.',
@@ -131,6 +142,15 @@ const MESSAGES = {
 
     defaultGroupName: 'Favorites',
     importedGroupName: 'Group',
+
+    groupType: 'Type',
+    groupTypeSites: 'Site group',
+    groupTypeTodo: 'To-do list',
+    todoPlaceholder: 'Add an item…',
+    todoEmpty: 'No items yet',
+    todoRemaining: '{count} item(s) left',
+    clearDone: 'Clear completed',
+    confirmDeleteTodoWithItems: 'Delete the list "{name}" and its {count} item(s)?',
   },
 };
 

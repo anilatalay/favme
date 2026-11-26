@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "favme",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Replaces Chrome's new tab page with your favorite sites, organized into groups.",
   "chrome_url_overrides": {
     "newtab": "newtab.html"

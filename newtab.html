@@ -13,9 +13,11 @@
     </div>
     <input id="search" class="search" type="search" data-i18n-placeholder="searchPlaceholder" autocomplete="off">
     <div class="actions">
+      <button id="btn-done-editing" class="btn primary" data-i18n="doneEditing" hidden></button>
       <button id="btn-new-group" class="btn primary" data-i18n="newGroup"></button>
       <button id="btn-menu" class="btn icon" data-i18n-title="more">⋯</button>
       <div id="menu" class="menu" hidden>
+        <button data-action="edit-layout" data-i18n="editLayout"></button>
         <button data-action="settings" data-i18n="settings"></button>
         <button data-action="export" data-i18n="exportJson"></button>
         <button data-action="import" data-i18n="importJson"></button>
@@ -35,6 +37,12 @@
       <h2 id="dlg-group-title"></h2>
       <label><span data-i18n="groupName"></span>
         <input name="name" required maxlength="40" autocomplete="off">
+      </label>
+      <label id="group-type-field"><span data-i18n="groupType"></span>
+        <select name="type">
+          <option value="sites" data-i18n="groupTypeSites"></option>
+          <option value="todo" data-i18n="groupTypeTodo"></option>
+        </select>
       </label>
       <div class="dialog-actions">
         <button type="button" class="btn" data-close data-i18n="cancel"></button>
